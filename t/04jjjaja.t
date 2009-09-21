@@ -5,7 +5,7 @@ use warnings;
 
 # jump, jump, jump around, JUMP AROUND!
 
-use Test::More tests => 22;
+use Test::More tests => 23;
 use Test::Time::HiRes;
 use Time::HiRes qw(usleep nanosleep gettimeofday tv_interval sleep time);
 
@@ -123,14 +123,11 @@ sleep(0.5);
   is($microseconds,500_001, "sleep microseconds okay");
 }
 
-__END__
-
-
 ########################################################################
 # time
 ########################################################################
 
-is(time(),999_999_970.500_001);
+is(time(),999_999_970.500_001, "time");
 
 ########################################################################
 # tvinterval
