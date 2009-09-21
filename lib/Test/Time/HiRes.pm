@@ -28,11 +28,11 @@ push @ISA, qw(Exporter);
 # It can go negative, but I have no-idea what that'll mean for the end
 # user;  The real Time::HiRes obviously never does that!
 # but I have no idea (tm)
-our $time_s = 1_000_000_000;
+my $time_s = 1_000_000_000;
 
 # this is the number of nanoseconds on top of that.  It doesn't
 # ever go negative (so it has a range of 0 to 999_999_999)
-our $time_n = 0;
+my $time_n = 0;
 
 # internal routine to add a floating point number of seconds
 sub _add_seconds($) {
@@ -56,7 +56,7 @@ sub _add_microseconds($) {
   my $seconds = int($microseconds / 1_000_000);
   $time_s += $seconds;
   $microseconds -= $seconds * 1_000_000;
-  
+
   _add_overflowing_nanoseconds( $microseconds * 1_000 );
   return;
 }
@@ -93,6 +93,8 @@ sub _add_overflowing_nanoseconds {
 		$time_s--;
 		$time_n += 1_000_000_000;
 	}
+
+	return;
 }
 
 ########################################################################
@@ -102,8 +104,10 @@ sub _add_overflowing_nanoseconds {
 # alter %INC to indicate that Time::HiRes was loaded from this
 # module, thereby preventing the real Time::HiRes being loaded whenever
 # we're used.
-$INC{"Time/HiRes.pm"} = __FILE__;
-
+{
+  ## no critic (RequireLocalizedPunctuationVars)
+  $INC{"Time/HiRes.pm"} = __FILE__;
+}
 # make the fake Time::HiRes use Exporter
 @Time::HiRes::ISA = qw(Exporter);
 
@@ -149,7 +153,7 @@ push @Time::HiRes::EXPORT_OK, "ITIMER_REAL";
 sub Time::HiRes::ITIMER_REALPROF { return 112 }
 push @Time::HiRes::EXPORT_OK, "ITIMER_REALPROF";
 
-sub Time::HiRes::ITIMER_VIRTUAL { return 118118 }
+sub Time::HiRes::ITIMER_VIRTUAL { return 118 }
 push @Time::HiRes::EXPORT_OK, "ITIMER_VIRTUAL";
 
 ###
@@ -295,9 +299,16 @@ push @Time::HiRes::EXPORT_OK, "ualarm";
 # time travel methods
 
 sub time_travel_to(;$$$) {
+
+  # move to the start of time
   $time_s = 0;
   $time_n = 0;
-  &time_travel_by(@_);
+
+  # then just move forward by the number of seconds passed.
+  # this copes nicely if we've been passed non-integer /
+  # overflowing values
+  time_travel_by(shift, shift, shift);
+  return;
 }
 push @EXPORT, "time_travel_to";
 
@@ -305,6 +316,7 @@ sub time_travel_by(;$$$) {
   _add_seconds(shift || 0);
   _add_microseconds(shift || 0);
   _add_nanoseconds(shift || 0);
+  return;
 }
 push @EXPORT, "time_travel_by";
 
@@ -326,7 +338,7 @@ Test::Time::HiRes - help testing code by mocking Time::HiRes
   # module to test;
   use Bomb;
   my $b = Bomb->new( countdown => 30 );
-  
+
   # jump thirty seconds into the future, i.e. get
   # gettimebyday to report time 30 seconds later
   time_travel_by(30,0);
@@ -389,7 +401,7 @@ seconds, microseconds, and zero nanoseconds)
 
 =item time_travel_by($delta_seconds, $delta_microseconds, $delta_nanoseconds)
 
-Move the clock forwards (or backwards) by the passed number of seconds, 
+Move the clock forwards (or backwards) by the passed number of seconds,
 microseconds and nanoseconds
 
 =back
@@ -398,9 +410,7 @@ In both cases you may ommit any argument and it will be assumed to be zero.
 
 You may use floating point arguments for any of these arguments and this module
 will attempt to Do The Right Thing, so far as the floating point number
-system on your computer will allow.   If you pass Math::BigFloat numbers as any
-of the arguments then this module will certainly do the right thing (as that's
-what we use under the hood to keep track of the total nanoseconds passed)
+system on your computer will allow.
 
 =head1 AUTHOR
 
