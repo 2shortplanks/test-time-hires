@@ -286,7 +286,9 @@ sub Time::HiRes::stat(;$) {
 push @Time::HiRes::EXPORT_OK, "stat";
 
 sub Time::HiRes::tv_interval {
-  croak "Function 'tv_interval' imported from Time::HiRes called.  This function is not implemented by Test::Time::HiRes";
+  my $t0 = shift;
+  my $t1 = @_ ? shift : [Time::HiRes::gettimeofday()];
+  return $t1->[0] - $t0->[0] + (($t1->[1] - $t0->[1]) / 1_000_000);
 }
 push @Time::HiRes::EXPORT_OK, "tv_interval";
 

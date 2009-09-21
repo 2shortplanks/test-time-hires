@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-use Test::More tests => 25;
+use Test::More tests => 24;
 
 ########################################################################
 # importing from Test::Time::HiRes
@@ -101,7 +101,6 @@ d_usleep();
 getitimer "foo"
 setitimer "foo", "bar", "baz";
 stat "foo";
-tv_interval();
 ualarm "foo", "bar";
 ENDOFTESTS
 

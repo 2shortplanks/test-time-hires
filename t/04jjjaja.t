@@ -5,7 +5,7 @@ use warnings;
 
 # jump, jump, jump around, JUMP AROUND!
 
-use Test::More tests => 23;
+use Test::More tests => 25;
 use Test::Time::HiRes;
 use Time::HiRes qw(usleep nanosleep gettimeofday tv_interval sleep time);
 
@@ -132,3 +132,15 @@ is(time(),999_999_970.500_001, "time");
 ########################################################################
 # tvinterval
 ########################################################################
+
+my $t0 = [gettimeofday];
+time_travel_by(300,100_000);
+my $elapsed = tv_interval( $t0 );
+is($elapsed, 300.1, "tv_interval");
+
+my $t1 = [gettimeofday];
+time_travel_to(123456789,1234567);
+my $elapsed2 = tv_interval( $t0, $t1);
+is($elapsed2, 300.1, "tv_interval with param");
+
+
