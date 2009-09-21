@@ -5,7 +5,6 @@ use strict;
 
 use 5.010;
 
-
 use Carp qw(croak);
 
 # stop this loading in its tracks if someone has already loaded Time::HiRes
@@ -18,18 +17,83 @@ use vars qw($AUTOLOAD $VERSION @ISA @EXPORT);
 require Exporter;
 push @ISA, qw(Exporter);
 
-use Math::BigFloat;
-
 ########################################################################
-# constants
+# The time
 ########################################################################
 
-my $MILLISECONDS_IN_A_SECOND = Math::BigFloat->new( 1000 );
-my $MICROSECONDS_IN_A_SECOND = $MILLISECONDS_IN_A_SECOND * 1000;
-my $NANOSECONDS_IN_A_SECOND  = $MICROSECONDS_IN_A_SECOND * 1000;
+# we keep two figures here, seconds and nanoseconds
+# this is so we don't lose accuracy on 32bit systems
 
-# time contains the currnent simulated time in nanoseconds
-my $time = $NANOSECONDS_IN_A_SECOND * "1_000_000_000";
+# this is the integer number of seconds since the epoch.
+# It can go negative, but I have no-idea what that'll mean for the end
+# user;  The real Time::HiRes obviously never does that!
+# but I have no idea (tm)
+our $time_s = 1_000_000_000;
+
+# this is the number of nanoseconds on top of that.  It doesn't
+# ever go negative (so it has a range of 0 to 999_999_999)
+our $time_n = 0;
+
+# internal routine to add a floating point number of seconds
+sub _add_seconds($) {
+  my $seconds = shift;
+
+  # break into integer and non integer parts
+  my $int_seconds  = int($seconds);
+  my $sub_seconds  = $seconds - $int_seconds;
+
+  $time_s += $int_seconds;
+  _add_overflowing_nanoseconds( 1_000_000_000 * $sub_seconds );
+
+  return;
+}
+
+# internal routine to add a floating point number of microseconds
+sub _add_microseconds($) {
+  my $microseconds = shift;
+
+  # handle whole seconds
+  my $seconds = int($microseconds / 1_000_000);
+  $time_s += $seconds;
+  $microseconds -= $seconds * 1_000_000;
+  
+  _add_overflowing_nanoseconds( $microseconds * 1_000 );
+  return;
+}
+
+# internal routine to add a number of nanoseconds
+sub _add_nanoseconds($) {
+  my $nanoseconds = shift;
+
+  # handle whole seconds
+  my $seconds = int($nanoseconds / 1_000_000_000);
+  $time_s += $seconds;
+  $nanoseconds -= $seconds * 1_000_000_000;
+
+  _add_overflowing_nanoseconds( $nanoseconds );
+  return;
+}
+
+# note that _add_overflowing_nanoseconds expects nanonseconds
+# that have an absolute value of *less* than 1_000_000_000
+# (i.e. less than 1s)
+
+# Note that 32bits can hold up to positive or negative
+# 2_147_483_648, meaning we've got enough space for this to
+# overflow cleanly as long as the inputs are as stated.
+
+sub _add_overflowing_nanoseconds {
+	my $n = int(shift);
+
+	$time_n += $n;
+	if($time_n >= 1_000_000_000) {
+		$time_s++;
+		$time_n -= 1_000_000_000;
+	} elsif($time_n < 0) {
+		$time_s--;
+		$time_n += 1_000_000_000;
+	}
+}
 
 ########################################################################
 # Fake Time::HiRes package
@@ -93,55 +157,32 @@ push @Time::HiRes::EXPORT_OK, "ITIMER_VIRTUAL";
 ###
 
 sub Time::HiRes::gettimeofday() {
-
-  say STDERR "Time is $time";
-  say STDERR "nanoseconds in a second is $NANOSECONDS_IN_A_SECOND";
-  my $seconds      = int($time / $NANOSECONDS_IN_A_SECOND);
-  say STDERR "Seconds is $seconds";;
-
-  my $remainder    = $time - ($seconds * $NANOSECONDS_IN_A_SECOND);
-  my $microseconds = int($remainder) / 1000;
-  return ($seconds->numify,int($microseconds)->numify);
+  return ($time_s,int($time_n/1000));
 }
 push @Time::HiRes::EXPORT_OK, "gettimeofday";
 
 sub Time::HiRes::nanosleep($) {
   my $nanoseconds = shift;
-
-  # add the nanoseconds
-  $time += $nanoseconds;
-  $time->ffround(0);  # no fractions of nanoseconds
-  
+  _add_nanoseconds($nanoseconds);
   return
 }
 push @Time::HiRes::EXPORT_OK, "nanosleep";
 
 sub Time::HiRes::sleep(;@) {
   my $seconds = shift;
-  
-  # add the seconds
-  $time += $NANOSECONDS_IN_A_SECOND * $seconds;
-  $time->ffround(0);  # no fractions of nanoseconds
-
+  _add_seconds($seconds);
   return
 }
 push @Time::HiRes::EXPORT_OK, "sleep";
 
 sub Time::HiRes::time() {
-  # we add 0 here as ->numify returns a string that numifies into the number
-  # not a number.  This means if you try and do a string comparison between
-  # this an a perl number, the strings won't match (e.g. with Test::More::is)
-  # - more importantly, it doesn't matche the expected behavior of what we're
-  # simulating.  So we turn it into a number before returning it.
-  return ($time / $NANOSECONDS_IN_A_SECOND)->numify + 0;
+  return $time_s + ($time_n / 1_000_000_000);
 }
 push @Time::HiRes::EXPORT_OK, "time";
 
 sub Time::HiRes::usleep($) {
   my $microseconds = shift;
-  my $seconds = $microseconds / $MICROSECONDS_IN_A_SECOND;
-  $time += $seconds * $NANOSECONDS_IN_A_SECOND;
-  $time->ffround(0);  # no fractions of nanoseconds
+  _add_microseconds($microseconds);
   return
 }
 push @Time::HiRes::EXPORT_OK, "usleep";
@@ -253,25 +294,18 @@ push @Time::HiRes::EXPORT_OK, "ualarm";
 ########################################################################
 # time travel methods
 
-sub _time_travel {
-  my $start            = shift;
-  my $new_seconds      = Math::BigFloat->new(shift || "0");
-  my $new_microseconds = Math::BigFloat->new(shift || "0");
-  my $new_nanoseconds  = Math::BigFloat->new(shift || "0");
-
-  $time = $start
-        + $new_nanoseconds
-        + $new_microseconds * ($NANOSECONDS_IN_A_SECOND / $MICROSECONDS_IN_A_SECOND)
-        + $new_seconds      * $NANOSECONDS_IN_A_SECOND;
-  $time->fround(0);  # no fractions of nanoseconds
-
-  return;
+sub time_travel_to(;$$$) {
+  $time_s = 0;
+  $time_n = 0;
+  &time_travel_by(@_);
 }
-
-sub time_travel_to(;$$$) { return _time_travel(Math::BigFloat->new("0"), @_); }
 push @EXPORT, "time_travel_to";
 
-sub time_travel_by(;$$$) { return _time_travel($time, @_); }
+sub time_travel_by(;$$$) {
+  _add_seconds(shift || 0);
+  _add_microseconds(shift || 0);
+  _add_nanoseconds(shift || 0);
+}
 push @EXPORT, "time_travel_by";
 
 ########################################################################
@@ -333,7 +367,7 @@ Time::HiRes, but should you attempt to call them then they will simply throw
 an exception.
 
 When you load this module the time is set to be initially set to exactly
-2001-09-09T01:46:40 UTC, i.e. 1,000,000 seconds and zero microseconds
+2001-09-09T01:46:40 UTC, i.e. 1,000,000,000 seconds and zero microseconds
 and zero nanoseconds after the unix epoch.
 
 Please note that the simulated clock in this module, unlike the acutal
@@ -370,7 +404,10 @@ what we use under the hood to keep track of the total nanoseconds passed)
 
 =head1 AUTHOR
 
-Written by Mark Fowler E<lt>mark@twoshortplanks.comE<gt>
+Written by Mark Fowler E<lt>mark@twoshortplanks.comE<gt> with lots of
+help from Andrew Main (Zefram) E<lt>zefram@fysh.orgE<gt>.  All the bits
+where I got the maths right are Zefram's fault;  All the bits where I
+got it wrong are my fault.
 
 Copyright Mark Fowler 2009.  All Rights Reserved.
 

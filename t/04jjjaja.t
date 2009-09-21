@@ -5,7 +5,7 @@ use warnings;
 
 # jump, jump, jump around, JUMP AROUND!
 
-use Test::More tests => 1;
+use Test::More tests => 22;
 use Test::Time::HiRes;
 use Time::HiRes qw(usleep nanosleep gettimeofday tv_interval sleep time);
 
