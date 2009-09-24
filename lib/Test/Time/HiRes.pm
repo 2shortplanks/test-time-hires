@@ -345,7 +345,7 @@ Test::Time::HiRes - help testing code by mocking Time::HiRes
   # gettimebyday to report time 30 seconds later
   time_travel_by(30,0);
 
-  ok(Bomb->has_expoded, "someone set us up for the bomb");
+  ok(Bomb->has_expoded, "someone set us up the bomb");
 
 =head1 DESCRIPTION
 
