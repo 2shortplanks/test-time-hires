@@ -3,8 +3,6 @@ package Test::Time::HiRes;
 use strict;
 # use warnings;
 
-use 5.010;
-
 use Carp qw(croak);
 
 # stop this loading in its tracks if someone has already loaded Time::HiRes
@@ -16,6 +14,7 @@ BEGIN {
 use vars qw($AUTOLOAD $VERSION @ISA @EXPORT);
 require Exporter;
 push @ISA, qw(Exporter);
+$VERSION = 0.01;
 
 ########################################################################
 # The time
