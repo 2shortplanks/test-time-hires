@@ -376,7 +376,7 @@ The following functions of Time::HiRes are implemneted:
 
 =back
 
-All other functions (infact, any function of any name) can be imported from
+All other functions implmented by Time::HiRes can be imported from the mocked
 Time::HiRes, but should you attempt to call them then they will simply throw
 an exception.
 
@@ -392,7 +392,7 @@ the real Time::HiRes outside of testing.
 =head2 Functions exported by Test::Time::HiRes
 
 This module, as is a tradition for test modules, pollutes your namespace with
-several functions when you use.  These are:
+several functions when you use it.  These are:
 
 =over
 
